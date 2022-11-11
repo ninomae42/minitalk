@@ -1,0 +1,20 @@
+# executable files
+*/*a.out
+client
+server
+
+# object files
+*/*.o
+objs/
+
+# static libraries
+libft.a
+
+# editor config files
+.vscode
+compile_commands.json
+.cache
+
+# My local playground directory
+lab/
+test/
