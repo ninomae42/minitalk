@@ -3,6 +3,9 @@
 client
 server
 
+!client/
+!server/
+
 # object files
 */*.o
 objs/
