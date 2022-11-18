@@ -1,67 +1,71 @@
 #include "minitalk.h"
+#include <string.h>
 
-#define BIT_SHIFT_WIDTH 7
+#define MIN_PID 100
+#define MAX_PID 99998
 
-size_t	ft_strlen(const char *s)
+volatile sig_atomic_t	g_sig_val;
+
+void	handler(int signo, siginfo_t *si, void *ucontext)
 {
-	size_t	len;
+	(void)ucontext;
+	/* (void)si; */
 
-	len = 0;
-	while (s[len] != '\0')
-		len++;
-	return (len);
-}
-
-void	ft_putchar_fd(char c, int fd)
-{
-	write(fd, &c, sizeof(char));
-}
-
-void	ft_putendl_fd(const char *s, int fd)
-{
-	write(fd, s, ft_strlen(s));
-	ft_putchar_fd('\n', fd);
-}
-
-void	send_bit1(pid_t pid, char c)
-{
-	int	bit;
-	int	i;
-	unsigned char	uc;
-
-	uc = (unsigned char)c;
-	i = 7;
-	while (0 <= i)
+	printf("[handler]signo: %d, from_pid: %d\n", signo, si->si_pid);
+	fflush(stdout);
+	if (signo == SIGUSR1)
 	{
-		usleep(100);
-		bit = (uc >> i) & 0x01;
-		if (bit == 0)
-			kill(pid, SIGUSR1);
-		else
-			kill(pid, SIGUSR2);
-		i--;
+		g_sig_val = 1;
 	}
-	puts("\n");
+	else if (signo == SIGUSR2)
+	{
+		g_sig_val = 2;
+	}
 }
 
-void	send_bit(pid_t pid, char c)
+pid_t	check_and_set_server_pid(char *pid_str)
 {
-	unsigned char	bit;
-	unsigned char	i;
-	unsigned char	uc;
+	pid_t	server_pid;
 
-	uc = (unsigned char)c;
-	i = 0;
-	bit = 0;
-	while (i <= BIT_SHIFT_WIDTH)
+	server_pid = atoi(pid_str);
+	if (server_pid < MIN_PID || MAX_PID < server_pid)
 	{
-		bit = (uc >> (BIT_SHIFT_WIDTH - i)) & 0x1;
-		if (bit == 0)
-			kill(pid, SIGUSR1);
-		else
-			kill(pid, SIGUSR2);
-		usleep(100);
-		i++;
+		printf("server PID not valid\n");
+		exit(EXIT_FAILURE);
+	}
+	if (kill(server_pid, 0) == -1)
+	{
+		perror("server PID not valid");
+		exit(EXIT_FAILURE);
+	}
+	return (server_pid);
+}
+
+void	ping_to_server(pid_t pid)
+{
+	kill(pid, SIGUSR1);
+	pause();
+}
+
+void	initialize_signal_handler(void (*handler)(int, siginfo_t *, void *))
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(struct sigaction));
+	sa.sa_flags = SA_SIGINFO;
+	sigemptyset(&sa.sa_mask);
+	sigaddset(&sa.sa_mask, SIGUSR1);
+	sigaddset(&sa.sa_mask, SIGUSR2);
+	sa.sa_sigaction = handler;
+	if (sigaction(SIGUSR1, &sa, NULL) == -1)
+	{
+		perror("sigaction1");
+		exit(EXIT_FAILURE);
+	}
+	if (sigaction(SIGUSR2, &sa, NULL) == -1)
+	{
+		perror("sigaction2");
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -72,24 +76,18 @@ int	main(int argc, char **argv)
 
 	if (argc != 3)
 	{
-		printf("usage: ./client [server PID] [strings to send]\n");
+		printf("Usage: ./client [server PID] [string to send]\n");
 		exit(EXIT_FAILURE);
 	}
-	server_pid = atoi(argv[1]);
-	if (kill(server_pid, 0) == -1)
-	{
-		perror("cannot send null signal to server");
-		exit(EXIT_FAILURE);
-	}
+	server_pid = check_and_set_server_pid(argv[1]);
+
+	g_sig_val = 0;
+	initialize_signal_handler(handler);
+	ping_to_server(server_pid);
+	printf("connection established\n");
+
 	string = argv[2];
 	printf("server_pid: %d, string: %s\n", server_pid, string);
-	ft_putendl_fd("sending signals", STDOUT_FILENO);
 
-	while (*string)
-	{
-		send_bit(server_pid, *string);
-		string++;
-	}
-	send_bit(server_pid, 0x04);
 	exit(EXIT_SUCCESS);
 }
