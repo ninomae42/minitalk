@@ -20,11 +20,15 @@ SRCS_SERVER := $(addprefix $(SRCS_SERVER_DIR)/, $(SRCS_SERVER))
 OBJS_CLIENT := $(addprefix $(OBJS_CLIENT_DIR)/, $(OBJS_CLIENT))
 OBJS_SERVER := $(addprefix $(OBJS_SERVER_DIR)/, $(OBJS_SERVER))
 
-INC_DIR := ./includes
+INC_DIR := ./includes ./libft/includes
 INCLUDES := $(addprefix -I, $(INC_DIR))
+
+LIBFT_DIR := ./libft
+LIBFT := libft.a
 
 CC := cc
 CFLAGS := -Wall -Wextra -Werror
+MAKE := make
 RM := rm -rf
 
 .PHONY: all
@@ -38,11 +42,15 @@ $(OBJS_SERVER_DIR)/%o:$(SRCS_SERVER_DIR)/%c
 	@if [ ! -e `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-$(NAME_CLIENT): $(OBJS_CLIENT)
-	$(CC) $(CFLAGS) $(OBJS_CLIENT) -o $(NAME_CLIENT)
+$(NAME_CLIENT): $(LIBFT) $(OBJS_CLIENT)
+	$(CC) $(CFLAGS) $(OBJS_CLIENT) $(LIBFT) -o $(NAME_CLIENT)
 
-$(NAME_SERVER): $(OBJS_SERVER)
-	$(CC) $(CFLAGS) $(OBJS_SERVER) -o $(NAME_SERVER)
+$(NAME_SERVER): $(LIBFT) $(OBJS_SERVER)
+	$(CC) $(CFLAGS) $(OBJS_SERVER) $(LIBFT) -o $(NAME_SERVER)
+
+$(LIBFT):
+	$(MAKE) -C $(LIBFT_DIR)
+	mv $(addprefix $(LIBFT_DIR)/, $(LIBFT)) ./
 
 .PHONY: clean
 clean:
