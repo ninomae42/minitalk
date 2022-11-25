@@ -5,14 +5,12 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: tashimiz <tashimiz@student.42tokyo.jp      +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2022/11/25 16:58:40 by tashimiz          #+#    #+#             */
-/*   Updated: 2022/11/25 18:12:07 by tashimiz         ###   ########.fr       */
+/*   Created: 2022/11/25 16:58:12 by tashimiz          #+#    #+#             */
+/*   Updated: 2022/11/25 16:58:25 by tashimiz         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "minitalk.h"
-
-volatile t_info	g_info;
 
 void	initialize_signal_handler(void (*handler)(int, siginfo_t *, void *))
 {
@@ -31,61 +29,56 @@ void	initialize_signal_handler(void (*handler)(int, siginfo_t *, void *))
 
 void	handler(int signo, siginfo_t *si, void *ucontext)
 {
+	(void)signo;
+	(void)si;
 	(void)ucontext;
-	if (g_info.sigval == -1)
-		g_info.client_pid = si->si_pid;
-	if (si->si_pid == g_info.client_pid)
-		g_info.sigval = signo;
 }
 
-unsigned char	receive_single_char(pid_t client_pid)
+void	send_bit(pid_t server_pid, char c)
 {
-	unsigned char	uc;
+	unsigned char	bit;
 	unsigned char	i;
+	unsigned char	uc;
 
-	uc = 0;
+	uc = (unsigned char)c;
 	i = 0;
+	bit = 0;
 	while (i <= BIT_SHIFT_WIDTH)
 	{
+		bit = (uc >> (BIT_SHIFT_WIDTH - i)) & 0x1;
+		usleep(100);
+		if (bit == 0)
+			kill(server_pid, SIGUSR1);
+		else
+			kill(server_pid, SIGUSR2);
 		pause();
-		if (g_info.sigval == SIGUSR2)
-			uc = uc | (0x1 << (BIT_SHIFT_WIDTH - i));
-		g_info.sigval = 0;
-		if (i != 7)
-		{
-			usleep(100);
-			kill(client_pid, SIGUSR1);
-		}
 		i++;
 	}
-	return (uc);
 }
 
-int	main(void)
+int	main(int argc, char **argv)
 {
-	pid_t			server_pid;
-	unsigned char	uc;
+	pid_t	server_pid;
+	char	*string;
 
-	g_info.sigval = -1;
+	if (argc != 3)
+		puterr_exit("Usage: ./client [server_pid] [string]");
+	server_pid = ft_atoi(argv[1]);
+	if (server_pid < MIN_PID || MAX_PID < server_pid
+		|| kill(server_pid, 0) == -1)
+		puterr_exit("Error: server_pid not valid");
+	string = argv[2];
 	initialize_signal_handler(handler);
-	server_pid = getpid();
-	while (1)
+	print_client_info(server_pid, string);
+	kill(server_pid, SIGUSR1);
+	pause();
+	ft_putendl_fd("[client] sending message...", STDOUT_FILENO);
+	while (*string)
 	{
-		uc = 0x1;
-		print_server_info(server_pid);
-		ft_putendl_fd(SERVER_WAIT_MSG, STDOUT_FILENO);
-		pause();
-		usleep(100);
-		kill(g_info.client_pid, SIGUSR1);
-		while (g_info.sigval != -1 && uc != 0x0)
-		{
-			uc = receive_single_char(g_info.client_pid);
-			write(STDOUT_FILENO, &uc, sizeof(unsigned char));
-			usleep(100);
-			kill(g_info.client_pid, SIGUSR1);
-		}
-		ft_putchar_fd('\n', STDOUT_FILENO);
-		g_info.sigval = -1;
+		send_bit(server_pid, *string);
+		string++;
 	}
+	send_bit(server_pid, 0x0);
+	ft_putendl_fd("[client] message sent!", STDOUT_FILENO);
 	exit(EXIT_SUCCESS);
 }
