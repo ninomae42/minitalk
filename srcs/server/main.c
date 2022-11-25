@@ -1,62 +1,79 @@
 #include "minitalk.h"
-#include <string.h>
 
-#define BIT_SHIFT_WIDTH 7
+volatile t_info	g_info;
 
-volatile sig_atomic_t g_sig_val;
+void	initialize_signal_handler(void (*handler)(int, siginfo_t *, void *))
+{
+	struct sigaction	action;
+
+	action.sa_flags = SA_SIGINFO;
+	action.sa_sigaction = handler;
+	sigemptyset(&action.sa_mask);
+	sigaddset(&action.sa_mask, SIGUSR1);
+	sigaddset(&action.sa_mask, SIGUSR2);
+	if (sigaction(SIGUSR1, &action, NULL) == -1)
+		puterr_exit("Error: sigaction with SIGUSR1");
+	if (sigaction(SIGUSR2, &action, NULL) == -1)
+		puterr_exit("Error: sigaction with SIGUSR2");
+}
 
 void	handler(int signo, siginfo_t *si, void *ucontext)
 {
 	(void)ucontext;
-	/* (void)si; */
-
-	printf("[handler]signo: %d, from_pid: %d\n", signo, si->si_pid);
-	fflush(stdout);
-	if (g_sig_val == -1)
-		g_sig_val = si->si_pid;
-	else if (signo == SIGUSR1)
-		g_sig_val = 1;
-	else if (signo == SIGUSR2)
-		g_sig_val = 2;
+	if (g_info.sigval == -1)
+		g_info.client_pid = si->si_pid;
+	if (si->si_pid == g_info.client_pid)
+		g_info.sigval = signo;
 }
 
-void	initialize_signal_handler(void (*handler)(int, siginfo_t *, void *))
+unsigned char	receive_single_char(pid_t client_pid)
 {
-	struct sigaction sa;
+	unsigned char	uc;
+	unsigned char	i;
 
-	memset(&sa, 0, sizeof(struct sigaction));
-	sa.sa_flags = SA_SIGINFO;
-	sigemptyset(&sa.sa_mask);
-	sigaddset(&sa.sa_mask, SIGUSR1);
-	sigaddset(&sa.sa_mask, SIGUSR2);
-	sa.sa_sigaction = handler;
-	if (sigaction(SIGUSR1, &sa, NULL) == -1)
+	uc = 0;
+	i = 0;
+	while (i <= BIT_SHIFT_WIDTH)
 	{
-		perror("sigaction1");
-		exit(EXIT_FAILURE);
+		pause();
+		if (g_info.sigval == SIGUSR2)
+			uc = uc | (0x1 << (BIT_SHIFT_WIDTH - i));
+		g_info.sigval = 0;
+		if (i != 7)
+		{
+			usleep(100);
+			kill(client_pid, SIGUSR1);
+		}
+		i++;
 	}
-	if (sigaction(SIGUSR2, &sa, NULL) == -1)
-	{
-		perror("sigaction2");
-		exit(EXIT_FAILURE);
-	}
+	return (uc);
 }
 
 int	main(void)
 {
-	pid_t	pid;
-	pid_t	client_pid;
+	pid_t			server_pid;
+	unsigned char	uc;
 
-	g_sig_val = -1;
+	g_info.sigval = -1;
 	initialize_signal_handler(handler);
-
-	pid = getpid();
-	printf("[server] pid: %d\n", pid);
-
-	pause();
-	client_pid = g_sig_val;
-	kill(client_pid, SIGUSR1);
-	printf("new connection established with pid: %d\n", client_pid);
-
+	server_pid = getpid();
+	while (1)
+	{
+		uc = 0x1;
+		print_server_info(server_pid);
+		ft_putendl_fd(SERVER_WAIT_MSG, STDOUT_FILENO);
+		pause();
+		usleep(100);
+		kill(g_info.client_pid, SIGUSR1);
+		while (g_info.sigval != -1 && uc != 0x0)
+		{
+			uc = receive_single_char(g_info.client_pid);
+			write(STDOUT_FILENO, &uc, sizeof(unsigned char));
+			usleep(100);
+			kill(g_info.client_pid, SIGUSR1);
+		}
+		g_info.sigval = -1;
+		ft_putchar_fd('\n', STDOUT_FILENO);
+	}
 	exit(EXIT_SUCCESS);
 }

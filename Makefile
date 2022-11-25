@@ -8,8 +8,10 @@ OBJS_CLIENT_DIR := ./objs/client
 OBJS_SERVER_DIR := ./objs/server
 
 SRCS_CLIENT := main.c \
+			   utils.c \
 
 SRCS_SERVER := main.c \
+			   utils.c \
 
 OBJS_CLIENT := $(SRCS_CLIENT:.c=.o)
 OBJS_SERVER := $(SRCS_SERVER:.c=.o)
