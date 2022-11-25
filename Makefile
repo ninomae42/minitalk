@@ -56,10 +56,13 @@ $(LIBFT):
 
 .PHONY: clean
 clean:
+	$(MAKE) clean -C $(LIBFT_DIR)
 	$(RM) $(OBJS_ROOT_DIR)
 
 .PHONY: fclean
 fclean: clean
+	$(MAKE) fclean -C $(LIBFT_DIR)
+	$(RM) $(LIBFT)
 	$(RM) $(NAME_CLIENT) $(NAME_SERVER)
 
 .PHONY: re
@@ -69,3 +72,5 @@ re: fclean all
 norm:
 	-@norminette includes/
 	-@norminette srcs/
+
+bonus: all
